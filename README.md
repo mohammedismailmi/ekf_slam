@@ -279,21 +279,3 @@ Unlike LiDAR SLAM, camera-based systems:
 ## 📄 License
 
 Educational project for robotics course.
-
-## 👥 Contributors
-
-- USN School of Computer Science and Engineering
-- Minor in Robotics and Industrial Automation
-- Course: CS3112 - Perception & Localization
-
-## 📞 Support
-
-For issues or questions about the implementation:
-1. Review the code comments
-2. Check the troubleshooting section
-3. Refer to course materials on EKF-SLAM
-4. Consult with instructors
-
----
-
-**Happy Mapping! 🗺️🤖**
