@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Camera-Based EKF-SLAM Control</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            padding: 40px;
+            max-width: 800px;
+            width: 100%;
+        }
+
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 10px;
+            font-size: 2em;
+        }
+
+        .subtitle {
+            text-align: center;
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 0.9em;
+        }
+
+        .status-panel {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 30px;
+            border-left: 4px solid #667eea;
+        }
+
+        .status-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        .status-item:last-child {
+            border-bottom: none;
+        }
+
+        .status-label {
+            font-weight: 600;
+            color: #555;
+        }
+
+        .status-value {
+            color: #667eea;
+            font-family: 'Courier New', monospace;
+        }
+
+        .control-section {
+            margin-bottom: 30px;
+        }
+
+        .section-title {
+            font-size: 1.2em;
+            color: #333;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #667eea;
+        }
+
+        .control-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            max-width: 300px;
+            margin: 0 auto;
+        }
+
+        .control-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 20px;
+            border-radius: 10px;
+            font-size: 1.1em;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: 600;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .control-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
+        }
+
+        .control-btn:active {
+            transform: translateY(0);
+        }
+
+        .control-btn.stop {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            grid-column: 2;
+        }
+
+        .control-btn.forward {
+            grid-column: 2;
+        }
+
+        .control-btn.backward {
+            grid-column: 2;
+        }
+
+        .control-btn.left {
+            grid-column: 1;
+        }
+
+        .control-btn.right {
+            grid-column: 3;
+        }
+
+        .toggle-buttons {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .toggle-btn {
+            background: #f8f9fa;
+            color: #333;
+            border: 2px solid #667eea;
+            padding: 12px 24px;
+            border-radius: 25px;
+            font-size: 0.9em;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: 600;
+        }
+
+        .toggle-btn:hover {
+            background: #667eea;
+            color: white;
+        }
+
+        .toggle-btn.active {
+            background: #667eea;
+            color: white;
+        }
+
+        .info-box {
+            background: #fff3cd;
+            border: 1px solid #ffc107;
+            border-radius: 10px;
+            padding: 15px;
+            margin-top: 20px;
+        }
+
+        .info-box h3 {
+            color: #856404;
+            margin-bottom: 10px;
+            font-size: 1em;
+        }
+
+        .info-box ul {
+            margin-left: 20px;
+            color: #856404;
+            font-size: 0.9em;
+        }
+
+        .info-box li {
+            margin: 5px 0;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .status-indicator {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 5px;
+        }
+
+        .status-indicator.running {
+            background: #28a745;
+            animation: pulse 2s infinite;
+        }
+
+        .status-indicator.paused {
+            background: #ffc107;
+        }
+
+        @media (max-width: 600px) {
+            .container {
+                padding: 20px;
+            }
+
+            h1 {
+                font-size: 1.5em;
+            }
+
+            .control-btn {
+                padding: 15px;
+                font-size: 1em;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎥 Camera-Based EKF-SLAM</h1>
+        <p class="subtitle">Real-time Robot Control & Visualization</p>
+
+        <div class="status-panel">
+            <div class="status-item">
+                <span class="status-label">
+                    <span class="status-indicator running" id="statusIndicator"></span>
+                    Status
+                </span>
+                <span class="status-value" id="statusText">Running</span>
+            </div>
+            <div class="status-item">
+                <span class="status-label">Robot Position</span>
+                <span class="status-value" id="robotPos">Loading...</span>
+            </div>
+            <div class="status-item">
+                <span class="status-label">Robot Angle</span>
+                <span class="status-value" id="robotAngle">Loading...</span>
+            </div>
+            <div class="status-item">
+                <span class="status-label">EKF Position</span>
+                <span class="status-value" id="ekfPos">Loading...</span>
+            </div>
+            <div class="status-item">
+                <span class="status-label">Landmarks Detected</span>
+                <span class="status-value" id="landmarks">Loading...</span>
+            </div>
+        </div>
+
+        <div class="control-section">
+            <h2 class="section-title">🎮 Movement Controls</h2>
+            <div class="control-grid">
+                <button class="control-btn forward" onclick="sendCommand('forward')">
+                    ▲<br>Forward
+                </button>
+                <button class="control-btn left" onclick="sendCommand('left')">
+                    ◄<br>Left
+                </button>
+                <button class="control-btn stop" onclick="sendCommand('stop')">
+                    ■<br>STOP
+                </button>
+                <button class="control-btn right" onclick="sendCommand('right')">
+                    ►<br>Right
+                </button>
+                <button class="control-btn backward" onclick="sendCommand('backward')">
+                    ▼<br>Back
+                </button>
+            </div>
+        </div>
+
+        <div class="control-section">
+            <h2 class="section-title">👁️ View Options</h2>
+            <div class="toggle-buttons">
+                <button class="toggle-btn active" onclick="sendCommand('toggle_fov')">
+                    Camera FOV
+                </button>
+                <button class="toggle-btn active" onclick="sendCommand('toggle_grid')">
+                    Occupancy Grid
+                </button>
+                <button class="toggle-btn active" onclick="sendCommand('toggle_features')">
+                    Feature Landmarks
+                </button>
+                <button class="toggle-btn" onclick="sendCommand('pause')">
+                    ⏸️ Pause/Resume
+                </button>
+            </div>
+        </div>
+
+        <div class="info-box">
+            <h3>📚 How It Works</h3>
+            <ul>
+                <li><strong>Camera FOV:</strong> Yellow cone showing visible area</li>
+                <li><strong>Green Circles:</strong> True landmark positions</li>
+                <li><strong>Purple Circles:</strong> EKF estimated landmark positions</li>
+                <li><strong>Red Circle:</strong> Actual robot position</li>
+                <li><strong>Cyan Circle:</strong> EKF estimated robot position</li>
+                <li><strong>Occupancy Grid:</strong> Dark = obstacles, Light = free space</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        function sendCommand(command) {
+            fetch('/control', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ command: command })
+            })
+            .then(response => response.json())
+            .then(data => {
+                console.log('Command sent:', command);
+                // Toggle button active state for view options
+                if (command.startsWith('toggle')) {
+                    event.target.classList.toggle('active');
+                }
+            })
+            .catch(error => console.error('Error:', error));
+        }
+
+        function updateStatus() {
+            fetch('/status')
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('robotPos').textContent = 
+                        `(${data.robot_pos[0].toFixed(1)}, ${data.robot_pos[1].toFixed(1)})`;
+                    document.getElementById('robotAngle').textContent = 
+                        `${(data.robot_angle * 180 / Math.PI).toFixed(1)}°`;
+                    document.getElementById('ekfPos').textContent = 
+                        `(${data.ekf_pos[0].toFixed(1)}, ${data.ekf_pos[1].toFixed(1)})`;
+                    document.getElementById('landmarks').textContent = data.landmarks;
+                    
+                    const statusText = document.getElementById('statusText');
+                    const statusIndicator = document.getElementById('statusIndicator');
+                    
+                    if (data.paused) {
+                        statusText.textContent = 'Paused';
+                        statusIndicator.className = 'status-indicator paused';
+                    } else {
+                        statusText.textContent = 'Running';
+                        statusIndicator.className = 'status-indicator running';
+                    }
+                })
+                .catch(error => {
+                    console.error('Error fetching status:', error);
+                    document.getElementById('robotPos').textContent = 'Error';
+                });
+        }
+
+        // Update status every 100ms
+        setInterval(updateStatus, 100);
+        
+        // Initial update
+        updateStatus();
+
+        // Keyboard controls
+        document.addEventListener('keydown', (e) => {
+            switch(e.key) {
+                case 'ArrowUp':
+                case 'w':
+                    sendCommand('forward');
+                    break;
+                case 'ArrowDown':
+                case 's':
+                    sendCommand('backward');
+                    break;
+                case 'ArrowLeft':
+                case 'a':
+                    sendCommand('left');
+                    break;
+                case 'ArrowRight':
+                case 'd':
+                    sendCommand('right');
+                    break;
+                case ' ':
+                    e.preventDefault();
+                    sendCommand('pause');
+                    break;
+            }
+        });
+
+        document.addEventListener('keyup', (e) => {
+            if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'w', 's', 'a', 'd'].includes(e.key)) {
+                sendCommand('stop');
+            }
+        });
+
+        console.log('🎮 Controls loaded! Use arrow keys or WASD to control the robot.');
+    </script>
+</body>
+</html>
