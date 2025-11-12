@@ -795,7 +795,7 @@ def status():
     })
 
 def run_flask():
-    app.run(debug=False, port=5000, use_reloader=False)
+    app.run(debug=False, port=5001, use_reloader=False)
 
 def run_simulation():
     global sim
@@ -810,7 +810,7 @@ if __name__ == '__main__':
     print("="*60)
     print("Camera-Based EKF-SLAM Simulation")
     print("="*60)
-    print("Flask server running at: http://localhost:5000")
+    print("Flask server running at: http://localhost:5001")
     print("Open the web interface to control the robot")
     print("="*60)
     
