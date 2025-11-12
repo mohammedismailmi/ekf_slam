@@ -5,6 +5,8 @@ from flask import Flask, render_template, jsonify, request
 from flask_cors import CORS
 import threading
 import json
+from flask import render_template, send_from_directory, abort
+import os
 
 # Initialize Flask
 app = Flask(__name__)
@@ -67,9 +69,11 @@ class Camera:
             
             # Check if within FOV
             if abs(angle_diff) <= self.fov / 2:
-                # Add measurement noise
-                noise_dist = np.random.normal(0, 2)
-                noise_bearing = np.random.normal(0, 0.02)
+                # --- GAUSSIAN ERROR (MEASUREMENT) ---
+                # This was already here: noise is added to sensor readings
+                noise_dist = np.random.normal(0, 2)     # std dev of 2 pixels
+                noise_bearing = np.random.normal(0, 0.02) # std dev of ~1.15 degrees
+                # ------------------------------------
                 
                 visible.append({
                     'id': lm_id,
@@ -97,10 +101,10 @@ class EKF_SLAM:
         # Covariance matrix
         self.P = np.eye(3) * 0.1
         
-        # Process noise
+        # Process noise (model of the noise we added to Robot.update)
         self.Q = np.diag([0.1, 0.1, 0.05])
         
-        # Measurement noise
+        # Measurement noise (model of the noise in Camera.get_visible_landmarks)
         self.R = np.diag([4.0, 0.04])  # distance, bearing
         
         # Landmark dictionary
@@ -111,7 +115,7 @@ class EKF_SLAM:
         """Prediction step with motion model"""
         x, y, theta = self.state[0], self.state[1], self.state[2]
         
-        # Motion model
+        # Motion model (using commanded v, w)
         if abs(w) < 0.001:
             # Straight line motion
             x_new = x + v * math.cos(theta) * dt
@@ -367,13 +371,26 @@ class Robot:
         self.trail = []
         self.max_trail = 200
         
+        # --- NEW ---
+        # Define standard deviations for motion noise
+        # Feel free to tune these values
+        self.v_noise_std = 2.0   # Noise in linear velocity (units/sec)
+        self.w_noise_std = 0.05  # Noise in angular velocity (rad/sec)
+        # -----------
+        
     def update(self, dt, walls):
         """Update robot position with collision detection"""
         
+        # --- UPDATED: ADD GAUSSIAN ERROR (MOTION) ---
+        # Add noise to the commanded velocities to simulate imperfect motors
+        v_noisy = self.v + np.random.normal(0, self.v_noise_std)
+        w_noisy = self.w + np.random.normal(0, self.w_noise_std)
+        # ---------------------------------------------
+        
         # Calculate potential new state
         x, y, theta = self.x, self.y, self.angle
-        v, w = self.v, self.w
-
+        v, w = v_noisy, w_noisy # Use the noisy values for the update
+        
         if abs(w) < 0.001:
             x_new = x + v * math.cos(theta) * dt
             y_new = y + v * math.sin(theta) * dt
@@ -388,8 +405,6 @@ class Robot:
 
         # --- Collision Detection ---
         # Create a bounding box for the new position.
-        # Rect is (left, top, width, height). Center is (x_new, y_new).
-        # Radius is self.size. So diameter is self.size * 2.
         new_rect = pygame.Rect(x_new - self.size, y_new - self.size, self.size * 2, self.size * 2)
         
         # Check for collision
@@ -541,10 +556,13 @@ class SLAMSimulation:
         
         dt = 1.0 / FPS
         
-        # Update robot (now with collision detection)
+        # Update robot (now with collision detection and motion noise)
         self.robot.update(dt, self.walls)
         
         # EKF Prediction
+        # The EKF is given the *commanded* velocity, not the noisy one.
+        # This is correct: the filter knows your command, and its
+        # process noise (Q) models the *uncertainty* in that command.
         self.ekf.predict(self.robot.v, self.robot.w, dt)
         
         # Get camera observations (now with occlusion)
@@ -724,7 +742,12 @@ sim = None
 def index():
     # This file is not generated, but the Flask app expects it.
     # The user would need to create this 'index.html' separately.
-    return "<h1>SLAM Control Interface</h1><p>This server is running. Create an index.html with control buttons.</p>"
+    tpl_path = os.path.join(app.root_path, 'templates', 'index.html')
+    if os.path.exists(tpl_path):
+        return render_template('index.html')
+    else:
+        # Helpful fallback if file missing
+        return "<h1>SLAM Control Interface</h1><p>templates/index.html not found. Create it inside the templates/ folder.</p>", 200
 
 @app.route('/control', methods=['POST'])
 def control():
