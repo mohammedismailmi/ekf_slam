@@ -853,8 +853,8 @@ if __name__ == '__main__':
     print("="*60)
     print("Camera-Based EKF-SLAM Simulation")
     print("="*60)
-    print("Flask server running at: http://localhost:5001")
-    print("Create 'templates/index.html' and open in browser.")
+    print("Flask server running at: http://localhost:5000")
+    print("Open the web interface to control the robot")
     print("="*60)
     
     # Run pygame simulation in main thread
