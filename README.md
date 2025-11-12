@@ -175,7 +175,7 @@ Covariance Update: P = (I - K * H) * P
 
 ### Adjust Camera Parameters
 ```python
-self.camera = Camera(fov=90, max_range=300)
+self.camera = Camera(fov=60, max_range=200)
 ```
 
 ### Modify Process Noise
@@ -221,7 +221,7 @@ The simulation tracks:
 
 ### Flask Server Won't Start
 - Port 5000 might be in use
-- Modify port in `app.run(port=5000)`
+- Modify port in `app.run(port=5001)`
 
 ### Robot Moves Too Fast/Slow
 - Adjust velocity in control commands
