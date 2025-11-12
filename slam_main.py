@@ -4,7 +4,7 @@ import math
 from flask import Flask, render_template, jsonify, request
 from flask_cors import CORS
 import threading
-import json
+import json  # <-- ADDED
 from flask import render_template, send_from_directory, abort
 import os
 
@@ -520,6 +520,9 @@ class SLAMSimulation:
             grid_size=GRID_SIZE
         )
 
+        # --- ADDED FOR LOGGING ---
+        self.ekf_trajectory = [] # To log EKF path
+        
         # UI state
         self.show_fov = True
         self.show_grid = True
@@ -587,6 +590,10 @@ class SLAMSimulation:
             )
             # Update the mini-map with the new hits
             self.mini_map.update(self.occupancy_grid.current_grid_hits)
+            
+        # --- ADDED FOR LOGGING ---
+        # Log the EKF position after the predict/update cycle
+        self.ekf_trajectory.append((self.ekf.state[0], self.ekf.state[1]))
     
     def draw(self):
         """Draw everything"""
@@ -724,7 +731,31 @@ class SLAMSimulation:
         for i, text in enumerate(controls):
             surface = font.render(text, True, WHITE) # CHANGED (from user's BLACK)
             self.screen.blit(surface, (800, y_offset + i * 25))
-    
+
+    # --- ADDED METHOD FOR LOGGING ---
+    def save_results(self):
+        """Saves simulation results to a JSON file."""
+        print("Saving simulation results...")
+        
+        # Get final estimated landmarks
+        ekf_landmarks = self.ekf.get_estimated_landmarks()
+
+        results = {
+            # self.robot.trail already stores the true path
+            "true_robot_path": self.robot.trail, 
+            "ekf_robot_path": self.ekf_trajectory,
+            # Convert landmark dicts to simple lists of coordinates
+            "true_landmarks": list(self.true_landmarks.values()),
+            "ekf_landmarks": list(ekf_landmarks.values())
+        }
+        
+        try:
+            with open("slam_results.json", "w") as f:
+                json.dump(results, f, indent=4)
+            print("Successfully saved results to slam_results.json")
+        except Exception as e:
+            print(f"Error saving results: {e}")
+
     def run(self):
         """Main simulation loop"""
         while self.running:
@@ -732,6 +763,9 @@ class SLAMSimulation:
             self.update()
             self.draw()
             self.clock.tick(FPS)
+        
+        # --- ADDED FOR LOGGING ---
+        self.save_results() # Save data when the loop (and sim) ends
         
         pygame.quit()
 
@@ -747,7 +781,16 @@ def index():
         return render_template('index.html')
     else:
         # Helpful fallback if file missing
-        return "<h1>SLAM Control Interface</h1><p>templates/index.html not found. Create it inside the templates/ folder.</p>", 200
+        # We can serve the HTML from the previous turn as a string
+        # BUT the user only provided the HTML, not the JS logic.
+        # It's better to just use the HTML file they provided.
+        
+        # Check if the user's provided HTML is in the 'templates' folder
+        # Let's assume the user named their HTML file 'index.html'
+        # and put it in a 'templates' folder.
+        
+        # Fallback to a simple message
+        return "<h1>SLAM Control Interface</h1><p><b>Error:</b> 'templates/index.html' not found.</p><p>Please create a 'templates' folder in the same directory as this script, and place your HTML file inside it, named 'index.html'.</p>", 404
 
 @app.route('/control', methods=['POST'])
 def control():
@@ -795,7 +838,7 @@ def status():
     })
 
 def run_flask():
-    app.run(debug=False, port=5000, use_reloader=False)
+    app.run(debug=False, port=5001, use_reloader=False)
 
 def run_simulation():
     global sim
@@ -810,8 +853,8 @@ if __name__ == '__main__':
     print("="*60)
     print("Camera-Based EKF-SLAM Simulation")
     print("="*60)
-    print("Flask server running at: http://localhost:5000")
-    print("Open the web interface to control the robot")
+    print("Flask server running at: http://localhost:5001")
+    print("Create 'templates/index.html' and open in browser.")
     print("="*60)
     
     # Run pygame simulation in main thread
